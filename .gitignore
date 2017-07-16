@@ -1,0 +1,8 @@
+__pycache__/
+**/.DS_Store
+*.swp
+*.pyc
+.cache/
+data/
+**/cifar-10-python.tar.gz
+**/cifar-10-batches-py/
