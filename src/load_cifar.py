@@ -56,11 +56,34 @@ def _one_hot_encode(vector, n_unique):
         one_hot_matrix[i, y_i] = 1
     return one_hot_matrix
 
+def _preprocess(images_1d, labels_1d, n_labels=10, dshape=(32, 32, 3), new_dshape=(224, 224, 3)):
+    """ Preprocesses CIFAR10 images
+
+    images_1d: np.ndarray
+        Unprocessed images
+    labels_1d: np.ndarray
+        1d vector of labels
+    n_labels: int, 10
+        Images are split into 10 classes
+    dshape: array, [32, 32, 3]
+        Images are 32 by 32 RGB
+    """
+    labels = _one_hot_encode(labels_1d, n_labels)
+    # Reshape and rotate 1d vector into image
+    images_raw = rotate_reshape(images_1d, dshape)
+    # Rescale images to 224, 224
+    if new_dshape != dshape:
+        images_rescaled = rescale(images_raw, new_dshape)
+    else:
+        images_rescaled = images_raw
+    # Subtract mean RGB value from every pixel
+    images = subtract_mean_rgb(images_rescaled)
+    return images, labels
 
 # pylint: disable=too-many-instance-attributes
 class Dataset:
     """ Wrapper around CIFAR-10 Dataset"""
-    def __init__(self, batch_size):
+    def __init__(self, batch_size, data_path="./cifar-10-batches-py"):
         # There are 50 000 training images
         n_data = 50000
         if n_data % batch_size == 0:
@@ -69,40 +92,57 @@ class Dataset:
         else:
             raise Exception("Datapoints not divisible by batch size")
         self._batch_counter = 0
-        # Images are 32 by 32 RGB
-        self._dshape = [32, 32, 3]
-        # Images are split into 10 classes
-        self._n_labels = 10
         self.data = {"train": [], "test": []}
-
-    def setup(self, data_path="/Users/EltonLaw/data"):
-        """ Compiles and loads entire dataset into memory then applies preprocessing"""
-        foldername = "cifar-10-batches-py"
-        path = os.path.join(data_path, foldername)
-        train_files = ["data_batch_1", "data_batch_2", "data_batch_3", "data_batch_4",
-                       "data_batch_5"]
-        test_file = "test_batch"
+        self.data_path = data_path
+        self._setup_tr_complete = False
         # One-time thing, extracts tar file
         # _extract(dir_path, "cifar-10-python.tar.gz")
+
+    def setup_train_batches(self):
+        """ Create a list of starting and ending indices for each batch """
+        if self._setup_tr_complete:
+            raise Exception("Already called `setup_train_batches`")
+
+        train_files = ["data_batch_{}".format(i+1) for i in range(5)]
         images_1d, labels_1d = [], []
+        # Training dataset split into 5 parts, concatenate all 5 parts together
         for file in train_files:
-            images_temp, labels_temp = _load_unprocessed_batch(path, file)
+            images_temp, labels_temp = _load_unprocessed_batch(self.data_path, file)
             images_1d.append(images_temp)
             labels_1d.append(labels_temp)
-        labels = _one_hot_encode(labels_1d, self._n_labels)
-        # Reshape and rotate 1d vector into image
-        images_raw = rotate_reshape(images_1d, self._dshape)
-        # Rescale images to 224,244
-        images_rescaled = rescale(images_raw, [224, 224, 3])
-        # Subtract mean RGB value from every pixel
-        images = subtract_mean_rgb(images_rescaled)
-        train = [[images[i:i+self._batch_size], labels[i:i+self._batch_size]]
-                 for i in range(self._n_batches)]
-        self.data["train"] = train
+        # Hacky fix to flatten the array into a 2d matrix
+        images_1d = np.array(images_1d)
+        labels_1d = np.array(labels_1d)
+        images_1d = np.reshape(images_1d, (50000, 3072))
+        labels_1d = np.reshape(labels_1d, (50000,))
 
+        # Run preprocessing on concatenated (complete) training dataset
+        # EDIT: Can't preprocess everything in one go, runs out of memory
+        # images, labels = _preprocess(images_1d, labels_1d)
 
-    def next_train_batch(self):
+        # Split complete, unprocessed dataset into batches accordin to given batch size
+        for i in range(self._n_batches):
+            image_1d_batch = images_1d[i*self._batch_size:(i+1)*self._batch_size]
+            label_1d_batch = labels_1d[i*self._batch_size:(i+1)*self._batch_size]
+            self.data["train"].append([image_1d_batch, label_1d_batch])
+
+        self._setup_tr_complete = True
+
+    def load_train_batch(self):
         """ Load next batch"""
-        images, labels = self.data["train"][self._batch_counter]
+        if not self._setup_tr_complete:
+            raise Exception("Haven't setup training batches, run `setup_train_batches` first")
+
+        images_1d, labels_1d = self.data["train"][self._batch_counter]
+        images, labels = _preprocess(images_1d, labels_1d)
         self._batch_counter += 1
+        if self._batch_counter == self._n_batches:
+            self._batch_counter = 0
+        return images, labels
+
+    def load_test(self):
+        """ Returns test set"""
+        file_name = "test_batch"
+        images_1d, labels_1d = _load_unprocessed_batch(self.data_path, file_name)
+        images, labels = _preprocess(images_1d, labels_1d)
         return images, labels
