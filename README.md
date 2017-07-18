@@ -6,21 +6,22 @@ Model adapted for CIFAR-10.
 
 ### Running the script
 
-1. Clone this repository
+1. Clone this repo:
 		
 	```bash
 	$ git clone https://github.com/eltonlaw/machine-learning-models.git	$ cd machine-learning-models/VGG
 	```
-2. Download the dataset. Run the following from command line or if you're not comfortable with that, manually download the CIFAR-10 dataset from [here](https://www.cs.toronto.edu/~kriz/cifar.html) and move the tar file to `../machine-learning-models/VGG/`
 	
+2. Run the setup script. Here's what it does: 1) Creates a virtual machine and installs dependencies 2) Downloads and unzips dataset 3) Creates a `logs` directory to direct all model output.
+
 	```bash
-	$ curl -o cifar-10-python.tar.gz https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz
+	sh setup.sh
 	```
 		
-3. Run the model
+3. Run the model(s):
  	
  	```bash
-	$ python3 vgg.py
+	$ python3 vgg_original.py
 	```
 		
 	Default parameters are the ones I found to work best after fine-tuning. To change, them just pass values through the command line.
@@ -30,7 +31,7 @@ Model adapted for CIFAR-10.
 	* `epochs`
 
 	```bash
-	$ python3 vgg.py --learning_rate 1e-5 --batch_size=256 --epochs 100
+	$ python3 vgg_original.py --learning_rate 1e-5 --batch_size=256 --epochs 100
 	```	
 		
 ### About this Implementation
@@ -39,7 +40,7 @@ Note: The original paper was performed on scaled-down ImageNet images (following
 
 #### Accessing the Data
 
-The dataset used is CIFAR-10, which consists of 60 000 32x32 RGB images in 10 classes: airplane, automobile, bird, cat, deer, dog, frog, horse, ship, truck. 
+The dataset used is CIFAR-10, which consists of 60,000 32x32 RGB images in 10 classes: airplane, automobile, bird, cat, deer, dog, frog, horse, ship, truck. 
 
 After unpickling, you get a 10,000 x 3072 numpy array. The images have been flattened into a 1D 3072 vector. The standard format for images is 32x32x3 so I reshaped each 1D vector and plotted it.  
 
@@ -79,6 +80,14 @@ Perfect. The labels correspond correctly and everything else looks fine. We can 
 Data preprocessing consists of just a standardization step. 
 
 > "The only pre- processing we do is subtracting the mean RGB value, computed on the training set, from each pixel."
+
+### Experiments
+#### 1 - Rescaling to (224, 224, 3) and using the original VGG model
+
+
+### Results
+
+...
 
 
 
