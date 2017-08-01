@@ -8,9 +8,9 @@ import tarfile
 import pickle
 import numpy as np
 # pylint: disable=import-error
-from src.preprocess import rotate_reshape
-from src.preprocess import subtract_mean_rgb
-from src.preprocess import rescale
+from preprocess import rotate_reshape
+from preprocess import subtract_mean_rgb
+from preprocess import rescale
 
 
 def _extract(path, filename):
@@ -22,7 +22,7 @@ def _extract(path, filename):
         file.extractall(path=path)
 
 
-def _load_unprocessed_batch(dir_path, filename):
+def _unprocessed_batch(dir_path, filename):
     with open(os.path.join(dir_path, filename), 'rb') as file:
         data = pickle.load(file, encoding='bytes')
     images = data[list(data.keys())[2]]
@@ -56,7 +56,8 @@ def _one_hot_encode(vector, n_unique):
         one_hot_matrix[i, y_i] = 1
     return one_hot_matrix
 
-def _preprocess(images_1d, labels_1d, n_labels=10, dshape=(32, 32, 3), new_dshape=(224, 224, 3)):
+def _preprocess(images_1d, labels_1d, n_labels=10, dshape=(32, 32, 3),
+                reshape=[224, 224, 3]):
     """ Preprocesses CIFAR10 images
 
     images_1d: np.ndarray
@@ -71,11 +72,8 @@ def _preprocess(images_1d, labels_1d, n_labels=10, dshape=(32, 32, 3), new_dshap
     labels = _one_hot_encode(labels_1d, n_labels)
     # Reshape and rotate 1d vector into image
     images_raw = rotate_reshape(images_1d, dshape)
-    # Rescale images to 224, 224
-    if new_dshape != dshape:
-        images_rescaled = rescale(images_raw, new_dshape)
-    else:
-        images_rescaled = images_raw
+    # Rescale images to 224,244
+    images_rescaled = rescale(images_raw, reshape)
     # Subtract mean RGB value from every pixel
     images = subtract_mean_rgb(images_rescaled)
     return images, labels
@@ -85,10 +83,11 @@ class Dataset:
     """ Wrapper around CIFAR-10 Dataset"""
     def __init__(self, batch_size, data_path="./cifar-10-batches-py"):
         # There are 50 000 training images
-        n_data = 50000
-        if n_data % batch_size == 0:
+        self.n_data = 50000
+        self.n_labels = 10
+        if self.n_data % batch_size == 0:
             self._batch_size = batch_size
-            self._n_batches = int(n_data/batch_size)
+            self._n_batches = int(self.n_data/batch_size)
         else:
             raise Exception("Datapoints not divisible by batch size")
         self._batch_counter = 0
@@ -102,12 +101,12 @@ class Dataset:
         """ Create a list of starting and ending indices for each batch """
         if self._setup_tr_complete:
             raise Exception("Already called `setup_train_batches`")
-
-        train_files = ["data_batch_{}".format(i+1) for i in range(5)]
+        train_files = ["data_batch_1", "data_batch_2", "data_batch_3",
+                       "data_batch_4", "data_batch_5"]
         images_1d, labels_1d = [], []
         # Training dataset split into 5 parts, concatenate all 5 parts together
         for file in train_files:
-            images_temp, labels_temp = _load_unprocessed_batch(self.data_path, file)
+            images_temp, labels_temp = _unprocessed_batch(self.data_path, file)
             images_1d.append(images_temp)
             labels_1d.append(labels_temp)
         # Hacky fix to flatten the array into a 2d matrix
@@ -115,26 +114,34 @@ class Dataset:
         labels_1d = np.array(labels_1d)
         images_1d = np.reshape(images_1d, (50000, 3072))
         labels_1d = np.reshape(labels_1d, (50000,))
-
         # Run preprocessing on concatenated (complete) training dataset
-        # EDIT: Can't preprocess everything in one go, runs out of memory
-        # images, labels = _preprocess(images_1d, labels_1d)
+        images, labels = _preprocess(images_1d, labels_1d)
 
-        # Split complete, unprocessed dataset into batches accordin to given batch size
+        # Split preprocessed dataset into batches according to given batch size
         for i in range(self._n_batches):
-            image_1d_batch = images_1d[i*self._batch_size:(i+1)*self._batch_size]
-            label_1d_batch = labels_1d[i*self._batch_size:(i+1)*self._batch_size]
-            self.data["train"].append([image_1d_batch, label_1d_batch])
+            image_batch = images[i*self._batch_size:(i+1)*self._batch_size]
+            label_batch = labels[i*self._batch_size:(i+1)*self._batch_size]
+            self.data["train"].append(image_batch, label_batch)
 
         self._setup_tr_complete = True
+
+    # pylint: disable=invalid-name
+    def load_n_images(self, n=10, shape=(64, 64, 3)):
+        """ Loads two random images from train/test set. Used for testing """
+        files = ["data_batch_1", "data_batch_2", "data_batch_3",
+                 "data_batch_4", "data_batch_5", "test_batch"]
+        random_file = files[np.random.choice(len(files))]
+        imgs_1d, labels_1d = _unprocessed_batch(self.data_path, random_file)
+        rn = np.random.choice(len(labels_1d))
+        images, labels = _preprocess(imgs_1d[rn:rn+n], labels_1d[rn:rn+n],
+                                     reshape=shape)
+        return images, labels
 
     def load_train_batch(self):
         """ Load next batch"""
         if not self._setup_tr_complete:
-            raise Exception("Haven't setup training batches, run `setup_train_batches` first")
-
-        images_1d, labels_1d = self.data["train"][self._batch_counter]
-        images, labels = _preprocess(images_1d, labels_1d)
+            raise Exception("Run `setup_train_batches` first")
+        images, labels = self.data["train"][self._batch_counter]
         self._batch_counter += 1
         if self._batch_counter == self._n_batches:
             self._batch_counter = 0
@@ -143,6 +150,6 @@ class Dataset:
     def load_test(self):
         """ Returns test set"""
         file_name = "test_batch"
-        images_1d, labels_1d = _load_unprocessed_batch(self.data_path, file_name)
+        images_1d, labels_1d = _unprocessed_batch(self.data_path, file_name)
         images, labels = _preprocess(images_1d, labels_1d)
         return images, labels
