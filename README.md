@@ -9,7 +9,8 @@ Model adapted for CIFAR-10.
 1. Clone this repo:
 		
 	```bash
-	$ git clone https://github.com/eltonlaw/machine-learning-models.git	$ cd machine-learning-models/VGG
+	$ git clone https://github.com/eltonlaw/vgg-cifar10.git
+	$ cd vgg-cifar10
 	```
 	
 2. Run the setup script. Here's what it does: 1) Creates a virtual machine and installs dependencies 2) Downloads and unzips dataset 3) Creates a `logs` directory to direct all model output.
